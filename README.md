@@ -2,9 +2,9 @@
 
 I was inspired by [Coroutines in C by Simon Tatham](https://www.chiark.greenend.org.uk/~sgtatham/coroutines.html).
 
-This library implements  a  very  simple  round-robin  scheduler  with a proper
-context switching  mechanism  to  jump  between  co-routines. It is cooperative
-multitasking in userspace.
+Unlike  the  article, though, this library implements a very simple round-robin
+scheduler  with  a  proper  context  switching  mechanism   to   jump   between
+co-routines. It is cooperative multitasking in userspace.
 
 The two main functions to do this are:
   + ```casync_gather()```
@@ -84,11 +84,11 @@ casync_gather_static(freelist, 2,
 
 # Starting co-routines dynamically
 
-This use-case is  covered  in  ```example3.c``` where a server will start a new
-co-routine  for  every  client  that  joins.  This  is  accomplished using  the
+This use-case is covered in ```example3.c``` where a  server  will  start a new
+co-routine  for  every  client  that joins.  This  is  accomplished  using  the
 ```casync_start()```   function.   ```casync_start()```  will  create   a   new
-co-routine  and  add  it  to  the active list within the current  ``gather()```
-context.  It will be as if you had called ```gather()```  with  the  co-routine
+co-routine  and add it to the active list  within  the  current  ```gather()```
+context. It will be as if you had  called  ```gather()```  with  the co-routine
 added there. For example:
 
 ```c
