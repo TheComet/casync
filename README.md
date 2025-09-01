@@ -134,3 +134,26 @@ As  of now, error handling doesn't work as I intend yet. Co-routines  have  the
 function signature ```int func(void*)```. The intention is to be able to return
 0 for success and -1 for error. If any co-routine returns  an  error code, then
 ```casync_gather()``` should also return an error (doesn't work yet).
+
+# Building / Using as a library
+
+The simplest way to include casync in your own project is probably to  add  the
+source  files  directly.  casync  consists  of  one  header  file,  and  a  few
+platform-specific source files.
+
+For example, these are the files required for x86_64-linux:
+
+  + ```include/casync/casync.h```
+  + ```src/casync.c```
+  + ```src/sleep_posix.c```
+  + ```src/arch/stack_x86_64_sysv64.c```
+  + ```src/arch/yield_gas_x86_64_sysv64.s```
+
+These are the files required for x86_64-windows:
+
+  + ```include/casync/casync.h```
+  + ```src/casync.c```
+  + ```src/sleep_win32.c```
+  + ```src/arch/stack_x86_64_win64.c```
+  + ```src/arch/yield_masm_x86_64_win64.asm```
+

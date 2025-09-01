@@ -18,11 +18,13 @@ endif ()
 
 if (WIN32)
     set (CASYNC_ASSEMBLER "masm")
+    set (CASYNC_PLATFORM "win32")
 else ()
     set (CASYNC_ASSEMBLER "gas")
+    set (CASYNC_PLATFORM "posix")
 endif ()
 
-option (CASYNC_EXAMPLE "Build the example program" OFF)
+option (CASYNC_EXAMPLE "Build the example program" ON)
 set (CASYNC_ABI "${CASYNC_ABI}" CACHE STRING "Select the target ABI")
 set (CASYNC_ARCH "${CASYNC_ARCH}" CACHE STRING "Select the target architecture")
 set (CASYNC_ASSEMBLER "${CASYNC_ASSEMBLER}" CACHE STRING "Select the assembler")
@@ -35,7 +37,7 @@ set_property (CACHE CASYNC_ASSEMBLER
 
 add_library (casync STATIC
     "src/casync.c"
-    "src/sleep_posix.c"
+    "src/sleep_${CASYNC_PLATFORM}.c"
     "src/arch/stack_${CASYNC_ARCH}_${CASYNC_ABI}.c"
     "src/arch/yield_${CASYNC_ASSEMBLER}_${CASYNC_ARCH}_${CASYNC_ABI}.s")
 target_include_directories (casync PUBLIC
