@@ -86,7 +86,27 @@ casync_end_redirect:
   jmp     casync_end
 
 casync_yield:
-  SAVE_CONTEXT               # Save context of the current task
+  pushq   %rax
+  pushq   %rcx
+  pushq   %rdx
+  pushq   %rbx
+  pushq   %rbp
+  pushq   %rsi
+  pushq   %rdi
+  pushq   %r8
+  pushq   %r9
+  pushq   %r10
+  pushq   %r11
+  pushq   %r12
+  pushq   %r13
+  pushq   %r14
+  pushq   %r15
+  pushfq
+
+  # *casync_current_loop->active->stack = rsp
+  LOAD_TLS casync_current_loop, %rax
+  movq    (%rax), %rax        # Get first field in struct ("stack")
+  movq    %rsp, (%rax)        # Assign current stack pointer to field in struct
   leaq    -8(%rsp), %rsp     # Align
   call    casync_task_switch # Call scheduler
 casync_restore:

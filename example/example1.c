@@ -10,7 +10,7 @@ static int task(void* arg) {
 
 int main(void) {
     /* clang-format off */
-    return casync_gather(2,
+    casync_gather(2,
         task, (void*)1,
         task, (void*)2);
     /* clang-format on */

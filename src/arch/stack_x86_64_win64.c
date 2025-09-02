@@ -11,12 +11,11 @@ void* casync_init_stack(
     int       stack_words = stack_size / sizeof(uint64_t);
     sp += stack_words; /* x86 grows downwards */
 
-    /* Where to return to when task completes*/
-    sp -= 4;  /* 32 bytes of shadow spaces */
-    *--sp = (uint64_t)return_addr;
+    sp -= 4;                       /* 32 bytes of shadow space (win64) */
+    *--sp = (uint64_t)return_addr; /* Where to return to when task completes*/
 
-    /* Set up so we "return" to the task function when restoring context */
-    *--sp = (uint64_t)function; /* return address to task */
+    /* Set up so we "return" to the coroutine function when restoring context */
+    *--sp = (uint64_t)function;
 
     /* General purpose registers */
     --sp;                  /* rax */
@@ -28,7 +27,7 @@ void* casync_init_stack(
     --sp;                  /* rdi */
     sp -= 8;               /* r8 - r15 */
 
-    /* flags */
+    /* flags register */
     *--sp = 0;
 
     return sp;

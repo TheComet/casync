@@ -1,33 +1,33 @@
 #include "casync/casync.h"
 
 #if defined(_WIN32)
-#define WIN32_LEAN_AND_MEAN
-#include "windows.h"
-#include "winsock2.h"
-#include "ws2tcpip.h"
-#define CLOSE_SOCKET(x) closesocket(x)
+#    define WIN32_LEAN_AND_MEAN
+#    include "windows.h"
+#    include "winsock2.h"
+#    include "ws2tcpip.h"
+#    define CLOSE_SOCKET(x) closesocket(x)
 #else
-#include <arpa/inet.h>
-#include <fcntl.h>
-#include <netdb.h>
-#include <netinet/in.h>
-#include <sys/socket.h>
-#include <unistd.h>
-#define CLOSE_SOCKET(x) close(x)
+#    include <arpa/inet.h>
+#    include <fcntl.h>
+#    include <netdb.h>
+#    include <netinet/in.h>
+#    include <sys/socket.h>
+#    include <unistd.h>
+#    define CLOSE_SOCKET(x) close(x)
 #endif
 
+#include <errno.h>
 #include <stdarg.h>
 #include <stdio.h>
 #include <string.h>
-#include <errno.h>
 
 #define PORT    "8080"
 #define BACKLOG 10
 
 #if defined(_MSC_VER)
-#   define ALIGNED(x)
+#    define ALIGNED(x)
 #else
-#   define ALIGNED(x) __attribute__((aligned(x)))
+#    define ALIGNED(x) __attribute__((aligned(x)))
 #endif
 
 static int stop_server;
@@ -45,11 +45,12 @@ static int set_nonblock_reuse(int sockfd)
 {
 #if defined(_WIN32)
     unsigned long nonblock = 1;
-    char enable = 1;
+    char          enable = 1;
     if (ioctlsocket(sockfd, FIONBIO, &nonblock) != 0)
         return log_err("ioctlsocket() failed: %d\n", WSAGetLastError());
     if (setsockopt(sockfd, SOL_SOCKET, SO_REUSEADDR, &enable, sizeof(char)) < 0)
-        return log_err("setsocketopt(SO_REUSEADDR) failed: %d\n", WSAGetLastError());
+        return log_err(
+            "setsocketopt(SO_REUSEADDR) failed: %d\n", WSAGetLastError());
 #else
     const int enable = 1;
     int       flags = fcntl(sockfd, F_GETFL, 0);
@@ -76,7 +77,8 @@ static int handle_client(void* arg)
     {
         while ((rc = recv(fd, buf, 64 - 1, 0)) == -1 &&
 #if defined(_WIN32)
-            (WSAGetLastError() == WSAEWOULDBLOCK || WSAGetLastError() == WSAEINPROGRESS))
+               (WSAGetLastError() == WSAEWOULDBLOCK ||
+                WSAGetLastError() == WSAEINPROGRESS))
 #else
                (errno == EWOULDBLOCK || errno == EAGAIN))
 #endif
@@ -157,7 +159,8 @@ static int server(void* arg)
         if ((new_fd = accept(
                  sockfd, (struct sockaddr*)&their_addr, &sin_size)) == -1 &&
 #if defined(_WIN32)
-            (WSAGetLastError() == WSAEWOULDBLOCK || WSAGetLastError() == WSAEINPROGRESS))
+            (WSAGetLastError() == WSAEWOULDBLOCK ||
+             WSAGetLastError() == WSAEINPROGRESS))
 #else
             (errno == EAGAIN || errno == EWOULDBLOCK))
 #endif
@@ -229,7 +232,8 @@ static int client(void* arg)
 
     while ((rc = recv(sockfd, buf, 64 - 1, 0)) == -1 &&
 #if defined(_WIN32)
-            (WSAGetLastError() == WSAEWOULDBLOCK || WSAGetLastError() == WSAEINPROGRESS))
+           (WSAGetLastError() == WSAEWOULDBLOCK ||
+            WSAGetLastError() == WSAEINPROGRESS))
 #else
            (errno == EWOULDBLOCK || errno == EAGAIN))
 #endif
@@ -254,11 +258,13 @@ static uint32_t stacks[1024 * 64][10] ALIGNED(16);
 
 int main(void)
 {
+#if defined(_WIN32)
     WSADATA wsaData;
     if (WSAStartup(MAKEWORD(2, 2), &wsaData) != 0)
         return log_err("WSAStartup failed\n");
     if (LOBYTE(wsaData.wVersion) != 2)
         return log_err("Version 2.x of Winsock is not available\n");
+#endif
 
     /* clang-format off */
     casync_gather_static(
@@ -273,7 +279,9 @@ int main(void)
         client, NULL);
     /* clang-format on */
 
+#if defined(_WIN32)
     WSACleanup();
+#endif
 
     return 0;
 }
