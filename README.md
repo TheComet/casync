@@ -130,10 +130,13 @@ is run twice, and each instance of  ```task()```  adds  ```dynamic```  as well.
 
 # Error Handling
 
-As  of now, error handling doesn't work as I intend yet. Co-routines  have  the
-function signature ```int func(void*)```. The intention is to be able to return
-0 for success and -1 for error. If any co-routine returns  an  error code, then
-```casync_gather()``` should also return an error (doesn't work yet).
+Co-routines can return an  integer  status code to indicate success or failure.
+Returning 0 indicates success. Returning any other value  indicates  an  error.
+
+If  any co-routine returns an error, then the same error value will be returned
+by  ```gather()```.  Note,  though,  that all co-routines must  still  complete
+before ```gather()```  can  return. ```gather()``` will return the value of the
+last co-routine that returned an error.
 
 # Building / Using as a library
 
@@ -145,7 +148,6 @@ For example, these are the files required for x86_64-linux:
 
   + ```include/casync/casync.h```
   + ```src/casync.c```
-  + ```src/sleep_posix.c```
   + ```src/arch/stack_x86_64_sysv64.c```
   + ```src/arch/yield_gas_x86_64_sysv64.s```
 
@@ -153,7 +155,12 @@ These are the files required for x86_64-windows:
 
   + ```include/casync/casync.h```
   + ```src/casync.c```
-  + ```src/sleep_win32.c```
   + ```src/arch/stack_x86_64_win64.c```
   + ```src/arch/yield_masm_x86_64_win64.asm```
 
+There  are  additionally  some  platform-specific  utility  functions  such  as
+```casync_sleep_ns()```. These are optional,  but  if you need these functions,
+you must also add one of the following source files:
+
+  + ```util/sleep_posix.c```
+  + ```util/sleep_win32.c```

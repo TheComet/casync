@@ -1,4 +1,5 @@
 #include "casync/casync.h"
+
 #include <stdio.h>
 
 static size_t task_stacks1[1024 * 64][2] __attribute__((aligned(16)));
@@ -11,7 +12,7 @@ static void task(void* arg)
     for (i = 0; i != 5; ++i)
     {
         fprintf(stderr, "task %d: %d\n", (int)(intptr_t)arg, i);
-        casync_sleep_ms(200);
+        casync_yield();
     }
 }
 

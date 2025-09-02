@@ -18,17 +18,17 @@ void* casync_init_stack(
     *--sp = (uint64_t)function; /* return address to task */
 
     /* General purpose registers */
-    *--sp = 0;             /* rax */
-    *--sp = 0;             /* rcx */
-    *--sp = 0;             /* rdx */
-    *--sp = 0;             /* rbx */
-    *--sp = 0;             /* rbp */
-    *--sp = 0;             /* rsi */
+    --sp;                  /* rax */
+    --sp;                  /* rcx */
+    --sp;                  /* rdx */
+    --sp;                  /* rbx */
+    --sp;                  /* rbp */
+    --sp;                  /* rsi */
     *--sp = (uint64_t)arg; /* rdi */
     sp -= 8;               /* r8 - r15 */
 
     /* flags */
-    *--sp = 0x00000000;
+    *--sp = 0;
 
     return sp;
 }

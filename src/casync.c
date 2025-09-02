@@ -1,4 +1,5 @@
 #include "casync/casync.h"
+
 #include <assert.h>
 #include <stdarg.h>
 #include <stdlib.h>
@@ -15,10 +16,12 @@ struct casync_loop
     struct casync_task* active;
     struct casync_task* finished;
     struct casync_task  control_task;
+    int                 return_code;
 };
 
 __thread struct casync_loop* casync_current_loop;
 
+void casync_end_redirect(void);
 void casync_restore(void);
 
 /* -------------------------------------------------------------------------- */
@@ -28,9 +31,11 @@ void casync_task_switch(void)
 }
 
 /* -------------------------------------------------------------------------- */
-static void end_handler(void)
+void casync_end(int return_code)
 {
     struct casync_task* t = casync_current_loop->active;
+    if (return_code != 0)
+        casync_current_loop->return_code = return_code;
 
     /* Take current task out of the loop */
     struct casync_task* prev = t;
@@ -64,8 +69,8 @@ loop_start_static(struct casync_loop* loop, int (*function)(void*), void* arg)
     struct casync_task* task = loop->finished;
     assert(task != NULL);
     loop->finished = loop->finished->next;
-    task->stack =
-        casync_init_stack(function, arg, end_handler, task, task->stack_size);
+    task->stack = casync_init_stack(
+        function, arg, casync_end_redirect, task, task->stack_size);
 
     loop_schedule(loop, task);
 }
@@ -82,8 +87,8 @@ loop_start(struct casync_loop* loop, int (*function)(void*), void* arg)
         task = malloc(1024 * 1024);
         task->stack_size = 1024 * 1024;
     }
-    task->stack =
-        casync_init_stack(function, arg, end_handler, task, task->stack_size);
+    task->stack = casync_init_stack(
+        function, arg, casync_end_redirect, task, task->stack_size);
 
     loop_schedule(loop, task);
 }
@@ -103,6 +108,8 @@ void casync_start(int (*function)(void*), void* arg)
 /* -------------------------------------------------------------------------- */
 static int casync_run_loop(struct casync_loop* loop)
 {
+    loop->return_code = 0;
+
     while (1)
     {
         /* Run our chain */
@@ -120,7 +127,7 @@ static int casync_run_loop(struct casync_loop* loop)
             casync_yield();
     }
 
-    return 0;
+    return loop->return_code;
 }
 
 /* -------------------------------------------------------------------------- */

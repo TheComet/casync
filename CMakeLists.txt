@@ -37,7 +37,7 @@ set_property (CACHE CASYNC_ASSEMBLER
 
 add_library (casync STATIC
     "src/casync.c"
-    "src/sleep_${CASYNC_PLATFORM}.c"
+    "util/sleep_${CASYNC_PLATFORM}.c"
     "src/arch/stack_${CASYNC_ARCH}_${CASYNC_ABI}.c"
     "src/arch/yield_${CASYNC_ASSEMBLER}_${CASYNC_ARCH}_${CASYNC_ABI}.s")
 target_include_directories (casync PUBLIC
@@ -46,15 +46,15 @@ target_compile_options (casync PRIVATE
     -Wall -Wextra)
 
 if (CASYNC_EXAMPLE)
-    add_executable (casync_example1 "src/example1.c")
+    add_executable (casync_example1 "example/example1.c")
     target_link_libraries (casync_example1 PUBLIC casync)
     target_compile_options (casync_example1 PUBLIC -Wall -Wextra)
 
-    add_executable (casync_example2 "src/example2.c")
+    add_executable (casync_example2 "example/example2.c")
     target_link_libraries (casync_example2 PUBLIC casync)
     target_compile_options (casync_example2 PUBLIC -Wall -Wextra)
 
-    add_executable (casync_example3 "src/example3.c")
+    add_executable (casync_example3 "example/example3.c")
     target_link_libraries (casync_example3 PUBLIC casync)
     target_compile_options (casync_example3 PUBLIC -Wall -Wextra)
 endif ()
