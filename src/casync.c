@@ -4,6 +4,12 @@
 #include <stdarg.h>
 #include <stdlib.h>
 
+#if defined(_MSC_VER)
+#   define THREADLOCAL __declspec(thread)
+#else
+#   define THREADLOCAL __thread
+#endif
+
 struct casync_task
 {
     void*               stack;
@@ -19,7 +25,7 @@ struct casync_loop
     int                 return_code;
 };
 
-__thread struct casync_loop* casync_current_loop;
+THREADLOCAL struct casync_loop* casync_current_loop;
 
 void casync_end_redirect(void);
 void casync_restore(void);

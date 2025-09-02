@@ -1,4 +1,4 @@
-# Simple Coroutines in C
+# Coroutines in C
 
 I was inspired by [Coroutines in C by Simon Tatham](https://www.chiark.greenend.org.uk/~sgtatham/coroutines.html).
 
@@ -48,7 +48,7 @@ Limitations:
  + Currently, only the general purpose  registers  are  saved.  That means FPU and
    SIMD state will leak across co-routines. Adding  support  for  this is trivial,
    though, so expect an update soon.
- + The Windows port has not been done yet. This is coming soon as well.
+ + The Windows i386 port has not been done yet. This is coming soon as well.
 
 Features:
  + The scheduler state is stored in TLS (thread-local storage), meaning, you can

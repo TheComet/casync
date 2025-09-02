@@ -2,9 +2,15 @@
 
 #include <stdio.h>
 
-static size_t task_stacks1[1024 * 64][2] __attribute__((aligned(16)));
-static size_t task_stacks2[1024 * 64][2] __attribute__((aligned(16)));
-static size_t runner_stacks[1024 * 64][2] __attribute__((aligned(16)));
+#if defined(_MSC_VER)
+#   define ALIGNED(x)
+#else
+#   define ALIGNED(x) __attribute__((aligned(x)))
+#endif
+
+static size_t task_stacks1[1024 * 64][2] ALIGNED(16);
+static size_t task_stacks2[1024 * 64][2] ALIGNED(16);
+static size_t runner_stacks[1024 * 64][2] ALIGNED(16);
 
 static void task(void* arg)
 {

@@ -1,17 +1,34 @@
 #include "casync/casync.h"
+
+#if defined(_WIN32)
+#define WIN32_LEAN_AND_MEAN
+#include "windows.h"
+#include "winsock2.h"
+#include "ws2tcpip.h"
+#define CLOSE_SOCKET(x) closesocket(x)
+#else
 #include <arpa/inet.h>
-#include <errno.h>
 #include <fcntl.h>
 #include <netdb.h>
 #include <netinet/in.h>
+#include <sys/socket.h>
+#include <unistd.h>
+#define CLOSE_SOCKET(x) close(x)
+#endif
+
 #include <stdarg.h>
 #include <stdio.h>
 #include <string.h>
-#include <sys/socket.h>
-#include <unistd.h>
+#include <errno.h>
 
 #define PORT    "8080"
 #define BACKLOG 10
+
+#if defined(_MSC_VER)
+#   define ALIGNED(x)
+#else
+#   define ALIGNED(x) __attribute__((aligned(x)))
+#endif
 
 static int stop_server;
 
@@ -26,18 +43,25 @@ static int log_err(const char* fmt, ...)
 
 static int set_nonblock_reuse(int sockfd)
 {
+#if defined(_WIN32)
+    unsigned long nonblock = 1;
+    char enable = 1;
+    if (ioctlsocket(sockfd, FIONBIO, &nonblock) != 0)
+        return log_err("ioctlsocket() failed: %d\n", WSAGetLastError());
+    if (setsockopt(sockfd, SOL_SOCKET, SO_REUSEADDR, &enable, sizeof(char)) < 0)
+        return log_err("setsocketopt(SO_REUSEADDR) failed: %d\n", WSAGetLastError());
+#else
     const int enable = 1;
     int       flags = fcntl(sockfd, F_GETFL, 0);
     if (flags == -1)
         return log_err("fcntl() failed for socket: %s\n", strerror(errno));
-
     if (fcntl(sockfd, F_SETFL, flags | O_NONBLOCK) < 0)
         return log_err("fcntl() failed for socket: %s\n", strerror(errno));
-
     if (setsockopt(sockfd, SOL_SOCKET, SO_REUSEADDR, &enable, sizeof(int)) < 0)
         return log_err(
             "sotsocketopt(SO_REUSEADDR) failed for socket: %s\n",
             strerror(errno));
+#endif
 
     return 0;
 }
@@ -51,7 +75,11 @@ static int handle_client(void* arg)
     while (1)
     {
         while ((rc = recv(fd, buf, 64 - 1, 0)) == -1 &&
+#if defined(_WIN32)
+            (WSAGetLastError() == WSAEWOULDBLOCK || WSAGetLastError() == WSAEINPROGRESS))
+#else
                (errno == EWOULDBLOCK || errno == EAGAIN))
+#endif
         {
             casync_yield();
         }
@@ -67,7 +95,7 @@ static int handle_client(void* arg)
     }
 
     fprintf(stderr, "server: Client disconnected\n");
-    close(fd);
+    CLOSE_SOCKET(fd);
     return 0;
 }
 
@@ -107,7 +135,7 @@ static int server(void* arg)
             return -1;
         if (bind(sockfd, p->ai_addr, p->ai_addrlen) == -1)
         {
-            close(sockfd);
+            CLOSE_SOCKET(sockfd);
             log_err("bind() failed: %s\n", strerror(errno));
             continue;
         }
@@ -128,7 +156,11 @@ static int server(void* arg)
         sin_size = sizeof their_addr;
         if ((new_fd = accept(
                  sockfd, (struct sockaddr*)&their_addr, &sin_size)) == -1 &&
+#if defined(_WIN32)
+            (WSAGetLastError() == WSAEWOULDBLOCK || WSAGetLastError() == WSAEINPROGRESS))
+#else
             (errno == EAGAIN || errno == EWOULDBLOCK))
+#endif
         {
             casync_yield();
             continue;
@@ -172,21 +204,18 @@ static int client(void* arg)
         sockfd = socket(p->ai_family, p->ai_socktype, p->ai_protocol);
         if (sockfd == -1)
             return log_err("client: socket() failed: %s\n", strerror(errno));
-        if (set_nonblock_reuse(sockfd) != 0)
-            return -1;
-
-        while (
-            (rc = connect(sockfd, p->ai_addr, p->ai_addrlen)) == -1 &&
-            (errno == EWOULDBLOCK || errno == EAGAIN || errno == EINPROGRESS))
+        if (connect(sockfd, p->ai_addr, p->ai_addrlen) != 0)
         {
-            casync_yield();
+            log_err("client: connect() failed: %s\n", strerror(errno));
+            CLOSE_SOCKET(sockfd);
+            continue;
         }
-        if (rc == 0)
-            break;
-
-        log_err("client: connect() failed: %s\n", strerror(errno));
-        close(sockfd);
-        continue;
+        if (set_nonblock_reuse(sockfd) != 0)
+        {
+            CLOSE_SOCKET(sockfd);
+            continue;
+        }
+        break;
     }
     freeaddrinfo(servinfo);
 
@@ -199,7 +228,11 @@ static int client(void* arg)
     send(sockfd, buf, msg_len, 0);
 
     while ((rc = recv(sockfd, buf, 64 - 1, 0)) == -1 &&
+#if defined(_WIN32)
+            (WSAGetLastError() == WSAEWOULDBLOCK || WSAGetLastError() == WSAEINPROGRESS))
+#else
            (errno == EWOULDBLOCK || errno == EAGAIN))
+#endif
     {
         casync_yield();
     }
@@ -212,15 +245,21 @@ static int client(void* arg)
         log_err("client: recv() failed: %s\n", strerror(errno));
 
     fprintf(stderr, "client: Disconnecting...\n");
-    close(sockfd);
+    CLOSE_SOCKET(sockfd);
 
     return 0;
 }
 
-static uint32_t stacks[1024 * 64][10] __attribute__((aligned(16)));
+static uint32_t stacks[1024 * 64][10] ALIGNED(16);
 
 int main(void)
 {
+    WSADATA wsaData;
+    if (WSAStartup(MAKEWORD(2, 2), &wsaData) != 0)
+        return log_err("WSAStartup failed\n");
+    if (LOBYTE(wsaData.wVersion) != 2)
+        return log_err("Version 2.x of Winsock is not available\n");
+
     /* clang-format off */
     casync_gather_static(
         casync_stack_pool_init_linear(stacks,
@@ -233,6 +272,8 @@ int main(void)
         client, NULL,
         client, NULL);
     /* clang-format on */
+
+    WSACleanup();
 
     return 0;
 }

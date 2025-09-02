@@ -16,7 +16,7 @@ struct casync_task;
  *
  * @note This must be called within an casync_gather(), otherwise it will crash.
  */
-void casync_yield(void);
+extern void casync_yield(void);
 
 /*!
  * @brief Runs a set of co-routines until all complete.
