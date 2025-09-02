@@ -17,12 +17,16 @@ elseif (CMAKE_SIZEOF_VOID_P EQUAL 4)
 endif ()
 
 if (WIN32)
-    set (CASYNC_ASSEMBLER "masm")
     set (CASYNC_PLATFORM "win32")
+else ()
+    set (CASYNC_PLATFORM "posix")
+endif ()
+
+if (WIN32 AND NOT MINGW)
+    set (CASYNC_ASSEMBLER "masm")
     set (CASYNC_ASM_EXT "asm")
 else ()
     set (CASYNC_ASSEMBLER "gas")
-    set (CASYNC_PLATFORM "posix")
     set (CASYNC_ASM_EXT "s")
 endif ()
 
@@ -37,6 +41,12 @@ set_property (CACHE CASYNC_ARCH
     PROPERTY STRINGS "x86;x86_64")
 set_property (CACHE CASYNC_ASSEMBLER
     PROPERTY STRINGS "gas;masm")
+
+set (CASYNC_YIELD_IMPL "src/arch/yield_${CASYNC_ASSEMBLER}_${CASYNC_ARCH}_${CASYNC_ABI}.${CASYNC_ASM_EXT}")
+set (CASYNC_STACK_IMPL "src/arch/stack_${CASYNC_ARCH}_${CASYNC_ABI}.c")
+
+message (STATUS "Using : ${CASYNC_STACK_IMPL}")
+message (STATUS "Using : ${CASYNC_YIELD_IMPL}")
     
 if (CMAKE_C_COMPILER_ID STREQUAL "GNU" OR CMAKE_C_COMPILER_ID STREQUAL "Clang")
     enable_language (ASM)
@@ -48,8 +58,8 @@ endif ()
 add_library (casync STATIC
     "src/casync.c"
     "util/sleep_${CASYNC_PLATFORM}.c"
-    "src/arch/stack_${CASYNC_ARCH}_${CASYNC_ABI}.c"
-    "src/arch/yield_${CASYNC_ASSEMBLER}_${CASYNC_ARCH}_${CASYNC_ABI}.${CASYNC_ASM_EXT}")
+    ${CASYNC_YIELD_IMPL}
+    ${CASYNC_STACK_IMPL})
 target_include_directories (casync PUBLIC
     "include")
 target_compile_options (casync PUBLIC

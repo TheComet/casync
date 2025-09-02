@@ -19,8 +19,17 @@
   .global casync_yield
   .global casync_restore
 
-.macro LOAD_TLS var_name reg
-  movl    %gs:\var_name@NTPOFF, \reg
+.macro LOAD_TLS var_name
+  movl    %gs:\var_name@NTPOFF, %eax
+.endm
+
+.macro LOAD_TLS_WIN32 var_name
+  .extern __emutls_v.\var_name:
+  subl    $40, %esp
+  leal    __emutls_v.\var_name(%ebx), %ecx
+  call    __emutls_get_address
+  addl    $40, %esp
+  ret
 .endm
 
 .macro LOAD_GLOBAL var_name reg
@@ -33,13 +42,14 @@
   pushfl                      # eflags register
 
   # *casync_current_loop->active->stack = esp
-  LOAD_TLS casync_current_loop, %eax
+  #LOAD_TLS casync_current_loop
+  movl    %gs:casync_current_loop@NTPOFF, %eax
   movl    (%eax), %eax        # Get first field in struct ("stack")
   movl    %esp, (%eax)        # Assign current stack pointer to field in struct
 .endm
 
 .macro RESTORE_CONTEXT
-  LOAD_TLS casync_current_loop, %eax
+  movl    %gs:casync_current_loop@NTPOFF, %eax
   movl    (%eax), %eax        # Get first field in struct ("stack")
   movl    (%eax), %esp        # Assign stored stack pointer to esp
 

@@ -6,6 +6,7 @@
 #    include "winsock2.h"
 #    include "ws2tcpip.h"
 #    define CLOSE_SOCKET(x) closesocket(x)
+#    define SHUT_RDWR       SD_BOTH
 #else
 #    include <arpa/inet.h>
 #    include <fcntl.h>
