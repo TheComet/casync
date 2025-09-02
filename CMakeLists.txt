@@ -55,9 +55,6 @@ target_include_directories (casync PUBLIC
 target_compile_options (casync PUBLIC
     $<$<C_COMPILER_ID:GNU>:-Wall -Wextra>)
 
-target_compile_options (casync PUBLIC -fsanitize=address)
-target_link_libraries (casync PUBLIC asan)
-
 if (CASYNC_EXAMPLE)
     add_executable (casync_example1 "example/example1.c")
     target_link_libraries (casync_example1 PUBLIC casync)

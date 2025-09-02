@@ -30,7 +30,13 @@
 #    define ALIGNED(x) __attribute__((aligned(x)))
 #endif
 
-static int stop_server;
+struct end_server_args
+{
+    int timeout_ms;
+    int server_fd;
+};
+
+static uint32_t stacks[1024 * 64][10] ALIGNED(16);
 
 static int log_err(const char* fmt, ...)
 {
@@ -67,6 +73,63 @@ static int set_nonblock_reuse(int sockfd)
     return 0;
 }
 
+static int async_accept(
+    int fd, struct sockaddr_storage* addr, socklen_t* __restrict addr_len)
+{
+    char s[INET6_ADDRSTRLEN];
+
+    while (1)
+    {
+        int new_fd = accept(fd, (struct sockaddr*)addr, addr_len);
+        if (new_fd == -1 &&
+#if defined(_WIN32)
+            (WSAGetLastError() == WSAEWOULDBLOCK ||
+             WSAGetLastError() == WSAEINPROGRESS))
+#else
+            (errno == EAGAIN || errno == EWOULDBLOCK))
+#endif
+        {
+            casync_yield();
+            continue;
+        }
+
+        if (new_fd != -1)
+        {
+            inet_ntop(
+                addr->ss_family,
+                &((struct sockaddr_in*)addr)->sin_addr,
+                s,
+                sizeof s);
+            fprintf(stderr, "server: got connection from %s\n", s);
+        }
+
+        return new_fd;
+    }
+}
+
+static int async_recv(int fd, void* buf, size_t n, int flags)
+{
+    while (1)
+    {
+        int rc = recv(fd, buf, n, flags);
+        if (rc == -1 &&
+#if defined(_WIN32)
+            (WSAGetLastError() == WSAEWOULDBLOCK ||
+             WSAGetLastError() == WSAEINPROGRESS))
+#else
+            (errno == EWOULDBLOCK || errno == EAGAIN))
+#endif
+        {
+            casync_yield();
+            continue;
+        }
+
+        if (rc == -1)
+            log_err("client: recv() failed: %s\n", strerror(errno));
+        return rc;
+    }
+}
+
 static int handle_client(void* arg)
 {
     char buf[64];
@@ -75,19 +138,7 @@ static int handle_client(void* arg)
 
     while (1)
     {
-        while ((rc = recv(fd, buf, 64 - 1, 0)) == -1 &&
-#if defined(_WIN32)
-               (WSAGetLastError() == WSAEWOULDBLOCK ||
-                WSAGetLastError() == WSAEINPROGRESS))
-#else
-               (errno == EWOULDBLOCK || errno == EAGAIN))
-#endif
-        {
-            casync_yield();
-        }
-
-        if (rc < 0)
-            log_err("server: recv() failed: %s\n", strerror(errno));
+        rc = async_recv(fd, buf, 64 - 1, 0);
         if (rc <= 0)
             break;
 
@@ -103,10 +154,10 @@ static int handle_client(void* arg)
 
 static int end_server_timer(void* arg)
 {
-    int timeout_ms = (int)(intptr_t)arg;
-    casync_sleep_ms(timeout_ms);
+    struct end_server_args* args = arg;
+    casync_sleep_ms(args->timeout_ms);
     fprintf(stderr, "stopping server...\n");
-    stop_server = 1;
+    shutdown(args->server_fd, SHUT_RDWR);
     return 0;
 }
 
@@ -116,8 +167,8 @@ static int server(void* arg)
     struct addrinfo         hints, *servinfo, *p;
     struct sockaddr_storage their_addr;
     socklen_t               sin_size;
-    char                    s[INET6_ADDRSTRLEN];
     int                     rc;
+    struct end_server_args  end_server_args;
     (void)arg;
 
     memset(&hints, 0, sizeof hints);
@@ -151,38 +202,27 @@ static int server(void* arg)
     if (listen(sockfd, BACKLOG) == -1)
         return log_err("listen() failed: %s\n", strerror(errno));
 
-    casync_start_static(end_server_timer, (void*)(intptr_t)200);
+    end_server_args.timeout_ms = 200;
+    end_server_args.server_fd = sockfd;
+    casync_start_static(end_server_timer, &end_server_args);
 
-    while (stop_server == 0)
+    while (1)
     {
         sin_size = sizeof their_addr;
-        if ((new_fd = accept(
-                 sockfd, (struct sockaddr*)&their_addr, &sin_size)) == -1 &&
-#if defined(_WIN32)
-            (WSAGetLastError() == WSAEWOULDBLOCK ||
-             WSAGetLastError() == WSAEINPROGRESS))
-#else
-            (errno == EAGAIN || errno == EWOULDBLOCK))
-#endif
+        new_fd = async_accept(sockfd, &their_addr, &sin_size);
+        if (new_fd == -1)
+            break;
+
+        if (set_nonblock_reuse(new_fd) != 0)
         {
-            casync_yield();
+            CLOSE_SOCKET(new_fd);
             continue;
         }
 
-        if (new_fd == -1)
-            return log_err("accept failed(): %s\n", strerror(errno));
-        if (set_nonblock_reuse(new_fd) != 0)
-            return -1;
-
-        inet_ntop(
-            their_addr.ss_family,
-            &((struct sockaddr_in*)&their_addr)->sin_addr,
-            s,
-            sizeof s);
-        fprintf(stderr, "server: got connection from %s\n", s);
-
         casync_start_static(handle_client, (void*)(intptr_t)new_fd);
     }
+
+    CLOSE_SOCKET(sockfd);
 
     return 0;
 }
@@ -230,31 +270,18 @@ static int client(void* arg)
     fprintf(stderr, "client: Sending '%s'\n", buf);
     send(sockfd, buf, msg_len, 0);
 
-    while ((rc = recv(sockfd, buf, 64 - 1, 0)) == -1 &&
-#if defined(_WIN32)
-           (WSAGetLastError() == WSAEWOULDBLOCK ||
-            WSAGetLastError() == WSAEINPROGRESS))
-#else
-           (errno == EWOULDBLOCK || errno == EAGAIN))
-#endif
-    {
-        casync_yield();
-    }
+    rc = async_recv(sockfd, buf, 64 - 1, 0);
     if (rc > 0)
     {
         buf[rc] = '\0';
         fprintf(stderr, "client: received '%s'\n", buf);
     }
-    else
-        log_err("client: recv() failed: %s\n", strerror(errno));
 
     fprintf(stderr, "client: Disconnecting...\n");
     CLOSE_SOCKET(sockfd);
 
     return 0;
 }
-
-static uint32_t stacks[1024 * 64][10] ALIGNED(16);
 
 int main(void)
 {
