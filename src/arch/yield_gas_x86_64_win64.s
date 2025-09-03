@@ -15,7 +15,6 @@
   .extern casync_current_loop
 
 .section .text
-  .extern casync_task_switch
   .extern casync_end
   .global casync_yield
   .global casync_restore
@@ -27,6 +26,7 @@
   subq    $40, %rsp
   leaq    __emutls_v.\var_name(%rip), %rcx
   call    __emutls_get_address
+  movq    (%rax), %rax
   addq    $40, %rsp
   ret
 .endm

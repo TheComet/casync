@@ -13,7 +13,6 @@
   .extern casync_current_loop
 
 .section .text
-  .extern casync_task_switch
   .extern casync_end
   .global casync_end_redirect
   .global casync_yield
@@ -37,35 +36,28 @@
   movl    (\reg), \reg
 .endm
 
-.macro SAVE_CONTEXT
-  pushal                      # eax, ecx, edx, ebx, esp, ebp, esi, edi
-  pushfl                      # eflags register
-
-  # *casync_current_loop->active->stack = esp
-  #LOAD_TLS casync_current_loop
-  movl    %gs:casync_current_loop@NTPOFF, %eax
-  movl    (%eax), %eax        # Get first field in struct ("stack")
-  movl    %esp, (%eax)        # Assign current stack pointer to field in struct
-.endm
-
-.macro RESTORE_CONTEXT
-  movl    %gs:casync_current_loop@NTPOFF, %eax
-  movl    (%eax), %eax        # Get first field in struct ("stack")
-  movl    (%eax), %esp        # Assign stored stack pointer to esp
-
-  popfl                       # eflags register
-  popal                       # eax, ecx, edx, ebx, esp, ebp, esi, edi
-.endm
-
 casync_end_redirect:
   pushl   %eax
   pushl   $0
   jmp     casync_end
 
 casync_yield:
-  SAVE_CONTEXT                # Save context of the current task
-  leal    -4(%esp), %esp      # return address(4) + context(8) + 4 = 16
-  call    casync_task_switch  # Call scheduler
+  pushfl                      # eflags register
+  pushal                      # eax, ecx, edx, ebx, esp, ebp, esi, edi
+
+  LOAD_TLS casync_current_loop
+  test    %eax, %eax
+  je      .no_loop
+
+  movl    (%eax), %edx        # edx = casync_current_loop->active
+  movl    4(%edx), %ecx       # rcx = casync_current_loop->active->next
+  movl    %esp, (%edx)        # casync_current_loop->active->stack = esp
+  movl    %ecx, (%eax)        # casync_current_loop->active = ecx
 casync_restore:
-  RESTORE_CONTEXT             # Restore context of new task
+  LOAD_TLS casync_current_loop
+  movl    (%eax), %edx        # Get first field in struct ("stack")
+  movl    (%edx), %esp        # Assign stored stack pointer to esp
+.no_loop:
+  popal                       # eax, ecx, edx, ebx, esp, ebp, esi, edi
+  popfl                       # eflags register
   ret                         # "Return" to the task function

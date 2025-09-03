@@ -19,23 +19,32 @@
   .extern casync_current_loop
 
 .section .text
-  .extern casync_task_switch
   .extern casync_end
   .global casync_yield
   .global casync_restore
   .global casync_end_redirect
 
-.macro LOAD_TLS var_name reg
-  movq    %fs:\var_name@TPOFF, \reg
+.macro LOAD_TLS var_name
+  movq    %fs:\var_name@TPOFF, %rax
 .endm
 
-.macro LOAD_GLOBAL var_name reg
-  movq    \var_name@GOTPCREL(%rip), \reg
+.macro LOAD_GLOBAL var_name
+  movq    \var_name@GOTPCREL(%rip)
   movq    (\reg), \reg
 .endm
 
-.macro SAVE_CONTEXT
+casync_end_redirect:
+  movl    %eax, %edi
+  jmp     casync_end
+
+casync_yield:
+  pushfq
   pushq   %rax
+
+  LOAD_TLS casync_current_loop
+  test    %rax, %rax
+  je      .no_loop
+
   pushq   %rcx
   pushq   %rdx
   pushq   %rbx
@@ -50,20 +59,16 @@
   pushq   %r13
   pushq   %r14
   pushq   %r15
-  pushfq
 
-  # *casync_current_loop->active->stack = rsp
-  LOAD_TLS casync_current_loop, %rax
-  movq    (%rax), %rax        # Get first field in struct ("stack")
-  movq    %rsp, (%rax)        # Assign current stack pointer to field in struct
-.endm
+  movq    (%rax), %rdx        # rdx = casync_current_loop->active
+  movq    8(%rdx), %rcx       # rcx = casync_current_loop->active->next
+  movq    %rsp, (%rdx)        # casync_current_loop->active->stack = rsp
+  movq    %rcx, (%rax)        # casync->current_loop->active = rcx
 
-.macro RESTORE_CONTEXT
-  LOAD_TLS casync_current_loop, %rax
-  movq    (%rax), %rax        # Get first field in struct ("stack")
-  movq    (%rax), %rsp        # Assign stored stack pointer to rsp
-
-  popfq
+casync_restore:
+  LOAD_TLS casync_current_loop
+  movq    (%rax), %rdx        # rdx = casync_current_loop->active
+  movq    (%rdx), %rsp        # rsp = casync_current_loop->active->stack
   popq    %r15
   popq    %r14
   popq    %r13
@@ -78,18 +83,8 @@
   popq    %rbx
   popq    %rdx
   popq    %rcx
+.no_loop:
   popq    %rax
-.endm
-
-casync_end_redirect:
-  movl    %eax, %edi
-  jmp     casync_end
-
-casync_yield:
-  SAVE_CONTEXT
-  leaq    -8(%rsp), %rsp     # Align
-  call    casync_task_switch # Call scheduler
-casync_restore:
-  RESTORE_CONTEXT            # Restore context of new task
-  ret                        # "Return" to the task function
+  popfq
+  ret
 

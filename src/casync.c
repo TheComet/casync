@@ -5,9 +5,9 @@
 #include <stdlib.h>
 
 #if defined(_MSC_VER)
-#   define THREADLOCAL __declspec(thread)
+#    define THREADLOCAL __declspec(thread)
 #else
-#   define THREADLOCAL __thread
+#    define THREADLOCAL __thread
 #endif
 
 struct casync_task
@@ -29,12 +29,6 @@ THREADLOCAL struct casync_loop* casync_current_loop;
 
 void casync_end_redirect(void);
 void casync_restore(void);
-
-/* -------------------------------------------------------------------------- */
-void casync_task_switch(void)
-{
-    casync_current_loop->active = casync_current_loop->active->next;
-}
 
 /* -------------------------------------------------------------------------- */
 void casync_end(int return_code)

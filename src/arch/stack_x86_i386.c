@@ -19,11 +19,11 @@ void* casync_init_stack(
     /* Set up so we "return" to the task function when restoring context */
     *--sp = (uint32_t)function; /* return address to task */
 
+    /* eflags */
+    *--sp = 0;
+
     /* General purpose registers (pusha) */
     sp -= 8;
-
-    /* eflags */
-    *--sp = 0x00000000;
 
     return sp;
 }

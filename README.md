@@ -24,6 +24,8 @@ static int task(void* arg) {
 }
 
 int main(void) {
+    task((void*)1);
+    task((void*)2);
     return casync_gather(2,
         task, (void*)1,
         task, (void*)2);
@@ -34,6 +36,10 @@ Prints:
 
 ```
 task 1
+task 1
+task 2
+task 2
+task 1
 task 2
 task 1
 task 2
@@ -41,6 +47,10 @@ task 2
 
 As  you  can see, the the ```task()``` function is  executed  as  a  co-routine
 twice,  and  execution  jumps   between   the   two  via  ```casync_yield()```.
+
+Also notice  how  it's  possible to call a co-routine from a "normal" function,
+without the need of a scheduler. When  a  co-routine  is  called directly, then
+```casync_yield()``` will return immediately and do nothing.
 
 # Features and Limitations
 

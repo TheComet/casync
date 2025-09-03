@@ -17,6 +17,9 @@ void* casync_init_stack(
     /* Set up so we "return" to the task function when restoring context */
     *--sp = (uint64_t)function; /* return address to task */
 
+    /* flags */
+    *--sp = 0;
+
     /* General purpose registers */
     --sp;                  /* rax */
     --sp;                  /* rcx */
@@ -26,9 +29,6 @@ void* casync_init_stack(
     --sp;                  /* rsi */
     *--sp = (uint64_t)arg; /* rdi */
     sp -= 8;               /* r8 - r15 */
-
-    /* flags */
-    *--sp = 0;
 
     return sp;
 }

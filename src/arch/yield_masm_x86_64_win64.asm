@@ -16,26 +16,36 @@
   EXTERN _tls_index: DWORD
 
 .code
-  EXTERN casync_task_switch: PROC
   EXTERN casync_end: PROC
   PUBLIC casync_yield
   PUBLIC casync_restore
   PUBLIC casync_end_redirect
 
-LOAD_TLS MACRO reg, var_name
+LOAD_TLS MACRO var_name
   mov     ecx, DWORD PTR _tls_index
   mov     rax, gs:[58h]
   mov     ebx, SECTIONREL var_name
   movsxd  rbx, ebx
   mov     rdx, [rax+rcx*8]
-  mov     reg, [rdx+rbx]
+  mov     rax, [rdx+rbx]
 ENDM
 
-SAVE_CONTEXT MACRO
+casync_end_redirect PROC
+  mov     ecx, eax
+  jmp     casync_end
+casync_end_redirect ENDP
+
+casync_yield PROC
+  pushfq
   push    rax
   push    rcx
   push    rdx
   push    rbx
+
+  LOAD_TLS casync_current_loop
+  test    rax, rax
+  je      .no_loop
+
   push    rbp
   push    rsi
   push    rdi
@@ -47,21 +57,16 @@ SAVE_CONTEXT MACRO
   push    r13
   push    r14
   push    r15
-  pushfq
 
-  ; *casync_current_loop->active->stack = rsp
+  mov     rdx, [rax]          ; rdx = casync_current_loop->active
+  mov     rcx, [rdx+8]        ; rcx = casync_current_loop->active->next
+  mov     [rdx], rsp          ; casync_current_loop->active->stack = rsp
+  mov     [rax], rcx          ; casync->current_loop->active = rcx
+
+casync_restore PROC
   LOAD_TLS rax, casync_current_loop
-  mov     rax, [rax]          ; Get first field in struct ("stack")
-  mov     [rax], rsp          ; Assign current stack pointer to field in struct
-ENDM
-
-RESTORE_CONTEXT MACRO
-  ; rsp = *casync_current_loop->active->stack
-  LOAD_TLS rax, casync_current_loop
-  mov     rax, [rax]          ; Get first field in struct ("stack")
-  mov     rsp, [rax]          ; Assign stored stack pointer to rsp
-
-  popfq
+  mov     rdx, [rax]          ; rdx = casync_current_loop->active
+  mov     rsp, [rdx]          ; rsp = casync_current_loop->active->stack
   pop     r15
   pop     r14
   pop     r13
@@ -73,28 +78,14 @@ RESTORE_CONTEXT MACRO
   pop     rdi
   pop     rsi
   pop     rbp
+.no_loop:
   pop     rbx
   pop     rdx
   pop     rcx
   pop     rax
-ENDM
-
-casync_end_redirect PROC
-  mov     ecx, eax
-  jmp     casync_end
-casync_end_redirect ENDP
-
-casync_yield PROC
-  SAVE_CONTEXT                ; Save context of the current task
-  lea     rsp, [rsp - 8 - 32] ; Align + reserve 32 bytes of shadow space
-  call    casync_task_switch  ; Call scheduler
-  RESTORE_CONTEXT             ; Restore context of new task
-  ret                         ; "Return" to the task function
-casync_yield ENDP
-
-casync_restore PROC
-  RESTORE_CONTEXT             ; Restore context of new task
-  ret                         ; "Return" to the task function
+  popfq
+  ret
 casync_restore ENDP
+casync_yield ENDP
 
 END
